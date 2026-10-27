@@ -158,22 +158,30 @@ az <- read.csv("Accra Zoo all samples.csv")
 az$Sex[which(az$Sex == "?")] <- NA
 az$Sex[which(az$Sex == "UNK")] <- NA
 
-id <- az %>% group_by(Bat.ID) %>% count() %>% filter(n > 1)
-az_recap <- az %>%  filter(Bat.ID %in% id$Bat.ID)
+id <- az %>% group_by(Bat.ID) %>% dplyr::count() %>% filter(n > 1)
+az_recap <- az %>% filter(Bat.ID %in% id$Bat.ID)
+az_recap$Sampling.Date.numeric <- as.numeric(as.Date(az_recap$Sampling.Date))
 
-ccfiga <- az_recap[!is.na(az_recap$Sex),] %>% ggplot(aes(y=logEBOVrs, x=Sampling.Date)) +
+##try breaks again
+
+ccfiga <- az_recap[!is.na(az_recap$Sex),] %>% ggplot(aes(y=logEBOVrs, x=Sampling.Date.numeric)) +
   geom_line(aes(group=factor(Bat.ID), col=Sex), size=0.1) +
   theme(legend.position = "none") +
   geom_point(size=0.7, aes(col=Sex)) +
   theme_minimal() + ylab("Corrected EBOV lnMFI") +
-  theme(axis.text.x = element_blank())
+  theme(axis.text.x = element_blank()) +
+  scale_x_continuous(breaks = seq(15370, 17953, length.out=8), 
+                     label = c("2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019")) +
+  xlab("Sampling Date")
 
-ccfigb <- az_recap[!is.na(az_recap$Sex),] %>% ggplot(aes(y=logMARVrs, x=Sampling.Date)) +
+ccfigb <- az_recap[!is.na(az_recap$Sex),] %>% ggplot(aes(y=logMARVrs, x=Sampling.Date.numeric)) +
   geom_line(aes(group=factor(Bat.ID), col=Sex), size=0.1) +
   theme(legend.position = "none") +
   geom_point(size=0.7, aes(col=Sex)) +
   theme_minimal() + ylab("Corrected MARV lnMFI") +
-  theme(axis.text.x = element_blank())
+  scale_x_continuous(breaks = seq(15370, 17953, length.out=8), 
+                     label = c("2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019")) +
+  xlab("Sampling Date")
 
 ccfig <- ggarrange(ccfiga, ccfigb, nrow=2, labels=c("A","B"))
 ggsave("captive fig.jpg", ccfig, height=6, width=6)
@@ -254,7 +262,7 @@ ggplot(bats %>% drop_na(ReproSex)) +
 ###########GLMs
 
 summary(glm(logMARVrs~Site, data=(bats_wild %>% filter(Species == "Eidolon helvum"))))
-summary(glm(logMARVrs~Site, data=(bats_wild %>% filter(!Species == "Rousettus aegyptiacus"))))
+summary(glm(logMARVrs~SiteSimple, data=(bats_wild %>% filter(!Species == "Rousettus aegyptiacus"))))
 
 nonrous <- bats_wild %>% filter(!Species == "Rousettus aegyptiacus")
 
@@ -264,6 +272,9 @@ coroostmod_marv_eid <- (glm(logMARVrs~SiteSimple, data=eidolon))
 coroostmod_ebov_epo <- (glm(logEBOVrs~SiteSimple, data=epomophorus))
 coroostmod_ebov_eid <- (glm(logEBOVrs~SiteSimple, data=eidolon))
 
+coroostmod_ebov <- (glm(logEBOVrs~SiteSimple, data=nonrous))
+coroostmod_marv <- (glm(logMARVrs~SiteSimple, data=nonrous))
+
 #report these
 summary(coroostmod_marv_epo)
 summary(coroostmod_ebov_epo)
@@ -271,8 +282,15 @@ summary(coroostmod_ebov_epo)
 summary(coroostmod_marv_eid)
 summary(coroostmod_ebov_eid)
 
+#all species
+summary(coroostmod_ebov)
+summary(coroostmod_marv)
+
 visreg(coroostmod_marv_epo,"SiteSimple",xlab="Site", ylab="MARV lnMFI")
 visreg(coroostmod_ebov_epo,"SiteSimple",xlab="Site", ylab="EBOV lnMFI")
+
+visreg(coroostmod_marv,"SiteSimple",xlab="Site", ylab="MARV lnMFI")
+visreg(coroostmod_ebov,"SiteSimple",xlab="Site", ylab="EBOV lnMFI")
 
 epomophorus$rousettus <- "N"
 epomophorus$rousettus[which(epomophorus$SiteSimple == "Buoyem")] <- "Y"
@@ -290,8 +308,25 @@ epo_MARV <- ggplot(epomophorus, aes(SiteSimple, logMARVrs, fill = rousettus)) +
   theme(legend.position = "none") +
   scale_fill_manual(values=c("white","red"))
 
-figs2 <- ggarrange(epo_EBOV, epo_MARV, ncol=2, labels=c("A","B"))
-ggsave("Fig S2.jpg", figs2, height=5, width=12)
+
+nonrous$rousettus <- "N"
+nonrous$rousettus[which(nonrous$SiteSimple == "Buoyem")] <- "Y"
+nonrous$rousettus[which(nonrous$SiteSimple == "Ve-Golokwati")] <- "Y"
+
+coroost_EBOV <- ggplot(nonrous, aes(SiteSimple, logEBOVrs, fill = rousettus)) + 
+  geom_boxplot() + 
+  theme_classic() + ylab("Corrected EBOV lnMFI") + xlab("Site") +
+  theme(legend.position = "none") +
+  scale_fill_manual(values=c("white","red"))
+
+coroost_MARV <- ggplot(nonrous, aes(SiteSimple, logMARVrs, fill = rousettus)) + 
+  geom_boxplot() + 
+  theme_classic() + ylab("Corrected MARV lnMFI") + xlab("Site") +
+  theme(legend.position = "none") +
+  scale_fill_manual(values=c("white","red"))
+
+figs2 <- ggarrange(coroost_EBOV, coroost_MARV, ncol=2, labels=c("A","B"))
+ggsave("Fig S2 revised.jpg", figs2, height=5, width=12)
 
 ##gamms
 
@@ -301,6 +336,8 @@ bats_wild$Age <- as.factor(bats_wild$Age)
 bats_wild$Species <- as.factor(bats_wild$Species)
 bats_wild$ReproSex <- as.factor(bats_wild$ReproSex)
 bats_wild2 <- bats_wild[-which(bats_wild$ReproSex == "Unknown"),]
+bats_wild2$ReproSex[which(bats_wild2$ReproSex == "Sexually immature")] <- "Subadult"
+bats_wild2$ReproSex <- relevel(bats_wild2$ReproSex, ref = "M")
 
 library(mgcv)
 ebovgam <- (gamm(logEBOVrs~s(date, k=25, by=Species)+ReproSex+BodyCondition,
@@ -314,6 +351,12 @@ marvgam <- (gamm(logMARVrs~s(date, k=25, by=Species)+ReproSex+BodyCondition,
                                         Species == "Rousettus aegyptiacus") %>% 
                    drop_na(Sex, Age, BodyCondition, date))$gam)
 
+##revisions
+ebovgam <- (gamm(logEBOVrs~s(date, k=25, by=Species)+ReproSex+BodyCondition,
+                 data=bats_wild2 %>% drop_na(Sex, Age, BodyCondition, date, Species))$gam)
+marvgam <- (gamm(logMARVrs~s(date, k=25, by=Species)+ReproSex+BodyCondition,
+                 data=bats_wild2 %>% drop_na(Sex, Age, BodyCondition, date, Species))$gam)
+
 summary(ebovgam)
 summary(marvgam)
 plot(ebovgam)
@@ -322,10 +365,14 @@ plot(marvgam)
 k.check(ebovgam) #edf < k', and non-significant resids, so this is OK
 k.check(marvgam) #edf < k', and non-significant resids, so this is OK
 
-newdata <- data.frame(date=rep(15631:17650, 3))
+newdata <- data.frame(date=rep(15631:17650, 6))
 newdata$Species[1:2020] <- "Eidolon helvum"
 newdata$Species[2021:4040] <- "Epomophorus gambianus"
 newdata$Species[4041:6060] <- "Rousettus aegyptiacus"
+newdata$Species[6061:8080] <- "Epomops franqueti"
+newdata$Species[8081:10100] <- "Myonycteris angolensis"
+newdata$Species[10100:12119] <- "Epomops buettikoferi"
+
 newdata$BodyCondition <- mean(bats_wild2$BodyCondition, na.rm=TRUE)
 newdata$ReproSex <- "M" #arbitrary value - coefficients are so small that it doesn't matter
 
@@ -336,26 +383,33 @@ predEBOV$lwr <- predEBOV$fit - (1.96 * predEBOV$se.fit)
 
 EBOVgamplot <- ggplot() + 
   geom_line(data=predEBOV, aes(x=date, y=fit, colour=Species), size=1) +
-  geom_ribbon(data=predEBOV, aes(x=date, ymin=lwr, ymax=upr, fill=Species), alpha=0.2) +
-  ylim(-2.5,2.6) + ylab("Corrected EBOV lnMFI values") + xlab("Date") +
-  scale_color_manual(values=c("darkgreen","blue","red")) + 
-  scale_fill_manual(values=c("green","blue","red")) + 
-  theme_classic() + theme(legend.position = c(0.18,0.9), legend.title = element_blank())
+  geom_ribbon(data=predEBOV, aes(x=date, ymin=lwr, ymax=upr, fill=Species), alpha=0.15) +
+  ylim(-2.1,2.6) + ylab("Corrected EBOV lnMFI values") + xlab("Date") +
+  scale_color_manual(values=c("darkgreen","blue","purple","orange","black","red")) + 
+  scale_fill_manual(values=c("green","blue","purple","orange","black","red")) + 
+  theme_classic() + theme(legend.position = c(0.35,0.9), 
+                          legend.title = element_blank(), 
+                          legend.text = element_text(face="italic")) +
+  guides(colour=guide_legend(ncol=2))
 
 predMARV <- bind_cols(newdata, as.data.frame(predict(marvgam, newdata=newdata, type = "link", se.fit=TRUE)))
 predMARV$date <- as.POSIXct(as.Date(predMARV$date, origin = "1970-01-01"))
 predMARV$upr <- predMARV$fit + (1.96 * predMARV$se.fit)
 predMARV$lwr <- predMARV$fit - (1.96 * predMARV$se.fit)
 
-MARVgamplot <- ggplot() + geom_line(data=predMARV, aes(x=date, y=fit, colour=Species), size=1) +
-  geom_ribbon(data=predMARV, aes(x=date, ymin=lwr, ymax=upr, fill=Species), alpha=0.2) +
-  ylim(-3.2,4.4) + ylab("Corrected MARV lnMFI values") + xlab("Date") +
-  scale_color_manual(values=c("darkgreen","blue","red")) + 
-  scale_fill_manual(values=c("green","blue","red")) + 
-  theme_classic() + theme(legend.position = c(0.18,0.9), legend.title = element_blank())
+MARVgamplot <- ggplot() + 
+  geom_line(data=predMARV, aes(x=date, y=fit, colour=Species), size=1) +
+  geom_ribbon(data=predMARV, aes(x=date, ymin=lwr, ymax=upr, fill=Species), alpha=0.15) +
+  ylim(-3.35,5) + ylab("Corrected MARV lnMFI values") + xlab("Date") +
+  scale_color_manual(values=c("darkgreen","blue","purple","orange","black","red")) + 
+  scale_fill_manual(values=c("green","blue","purple","orange","black","red")) + 
+  theme_classic() + theme(legend.position = c(0.35,0.9), 
+                          legend.title = element_blank(),
+                          legend.text = element_text(face="italic")) +
+  guides(colour=guide_legend(ncol=2))
 
 gamplot <- ggarrange(EBOVgamplot, MARVgamplot, nrow=2, labels=c("A","B"))
-ggsave("gamplot.png", gamplot, height=10, width=6)
+ggsave("gamplot revisions.png", gamplot, height=10, width=6)
 
 
 rousettus$date <- as.numeric(as.Date(rousettus$Sampling.Date))
@@ -1176,3 +1230,27 @@ supp_fig1b <- ggplot(bats_wild %>% filter(Species %in% c("Eidolon helvum","Epomo
 
 supp_fig1 <- ggarrange(supp_fig1a, supp_fig1b, ncol=2, labels=c("A","B"))
 ggsave("figS1.png", supp_fig1, height=5, width=11)
+
+
+###for thesis corrections
+
+setwd("~/Documents/PhD/thesis submission/corrections")
+
+supp_fig10a <- ggplot(bats) + 
+  geom_histogram(aes(x=logEBOVrs, fill=SiteSimple), alpha=0.4) + 
+  geom_vline(xintercept = 0) + 
+  xlim(c(-0.3,1.2)) +
+  theme_classic() + xlab("Corrected EBOV lnMFI") + ylab("Count") +
+  theme(legend.position = c(0.72,0.73)) +
+  labs(fill = "Site")
+
+supp_fig10b <- ggplot(bats) + 
+  geom_histogram(aes(x=logMARVrs, fill=SiteSimple), alpha=0.4) + 
+  geom_vline(xintercept = 0) + 
+  xlim(c(-0.3,1.2)) +
+  theme_classic() + xlab("Corrected MARV lnMFI") + ylab("Count") +
+  theme(legend.position = c(0.72,0.73)) +
+  labs(fill = "Site")
+
+supp_fig10 <- ggarrange(supp_fig10a, supp_fig10b, ncol=2, labels=c("A","B"))
+ggsave("figS10.png", supp_fig10, height=5, width=11)
